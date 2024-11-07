@@ -16,24 +16,22 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 @Component
-public class SimpleDynamicFileWriterConfig {
+public class DynamicFileWriterConfig {
 
     @Bean
     @StepScope
-    public FlatFileItemWriter<Film> fileWriter() {
-        FlatFileItemWriter<Film> writer = new FlatFileItemWriter<>();
+    public <T> FlatFileItemWriter<T> fileWriter(@Value("#{jobParameters['entityClass']}") Class<T> entityClass) {
+        FlatFileItemWriter<T> writer = new FlatFileItemWriter<>();
         writer.setResource(new FileSystemResource("data/output.csv"));
 
-        // Create a sample instance to extract field names dynamically
-        Film sample = new Film();
-        BeanWrapper wrapper = PropertyAccessorFactory.forBeanPropertyAccess(sample);
-        String[] fieldNames = wrapper.getPropertyDescriptors()
-                                     .stream()
-                                     .map(descriptor -> descriptor.getName())
-                                     .filter(name -> !"class".equals(name)) // exclude 'class' property
-                                     .toArray(String[]::new);
+        // Extract field names dynamically for the given entity class
+        BeanWrapper wrapper = PropertyAccessorFactory.forBeanPropertyAccess(entityClass);
+        String[] fieldNames = Arrays.stream(wrapper.getPropertyDescriptors())
+                                    .map(descriptor -> descriptor.getName())
+                                    .filter(name -> !"class".equals(name))
+                                    .toArray(String[]::new);
 
-        // Set header using the extracted field names
+        // Set dynamic header
         writer.setHeaderCallback(new FlatFileHeaderCallback() {
             @Override
             public void writeHeader(Writer writer) throws IOException {
@@ -42,13 +40,13 @@ public class SimpleDynamicFileWriterConfig {
             }
         });
 
-        // Set fields for line aggregator
-        DelimitedLineAggregator<Film> lineAggregator = new DelimitedLineAggregator<>();
+        // Set field extractor dynamically
+        DelimitedLineAggregator<T> lineAggregator = new DelimitedLineAggregator<>();
         lineAggregator.setDelimiter(",");
-        
-        BeanWrapperFieldExtractor<Film> fieldExtractor = new BeanWrapperFieldExtractor<>();
+
+        BeanWrapperFieldExtractor<T> fieldExtractor = new BeanWrapperFieldExtractor<>();
         fieldExtractor.setNames(fieldNames);
-        
+
         lineAggregator.setFieldExtractor(fieldExtractor);
         writer.setLineAggregator(lineAggregator);
 
